@@ -27,7 +27,7 @@ var (
 
 func init() {
 	caddy.RegisterModule(Middleware{})
-	httpcaddyfile.RegisterHandlerDirective("validate_github", parseCaddyfileHandler)
+	httpcaddyfile.RegisterHandlerDirective("validate_github_webhook", parseCaddyfileHandler)
 }
 
 type Middleware struct {
@@ -40,7 +40,7 @@ type Middleware struct {
 // CaddyModule returns the Caddy module information.
 func (Middleware) CaddyModule() caddy.ModuleInfo {
 	return caddy.ModuleInfo{
-		ID:  "http.handlers.validate_github",
+		ID:  "http.handlers.validate_github_webhook",
 		New: func() caddy.Module { return new(Middleware) },
 	}
 }
@@ -110,8 +110,7 @@ func (m *Middleware) Validate() error {
 
 // UnmarshalCaddyfile implements caddyfile.Unmarshaler. Syntax:
 //
-//     validate_github <secret>
-//
+//	validate_github_webhook <secret>
 func (m *Middleware) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 	for d.Next() {
 		if !d.Args(&m.Secret) {

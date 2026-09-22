@@ -6,7 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strings"
 
@@ -57,7 +57,7 @@ func (m *Middleware) Provision(ctx caddy.Context) error {
 // ServeHTTP implements the caddy.Handler interface.
 func (m Middleware) ServeHTTP(w http.ResponseWriter, r *http.Request,
 	next caddyhttp.Handler) error {
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		m.logger.Errorf("reading request body: %v", err)
 		http.Error(w, "invalid signature", http.StatusForbidden)
@@ -93,7 +93,7 @@ func (m Middleware) ServeHTTP(w http.ResponseWriter, r *http.Request,
 	}
 
 	m.logger.Debugf("successful webhook invocation from %s", r.RemoteAddr)
-	r.Body = ioutil.NopCloser(bytes.NewBuffer(b))
+	r.Body = io.NopCloser(bytes.NewBuffer(b))
 
 	return next.ServeHTTP(w, r)
 }

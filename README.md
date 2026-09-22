@@ -35,7 +35,7 @@ An example of this directive in context looks like this:
 
 ```
 route /update {
-    validate_github KcuP9N0iEqYHFBRUda6oHLP4UUub6EMz
+    validate_github_webhook KcuP9N0iEqYHFBRUda6oHLP4UUub6EMz
     exec * /path/to/bin/deploy.sh
 }
 ```

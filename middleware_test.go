@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/caddyserver/caddy/v2"
+	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 	"go.uber.org/zap/zaptest"
 )
@@ -101,4 +102,40 @@ func hashFromSecret(secret string, body []byte) string {
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write(body)
 	return fmt.Sprintf("sha256=%x", mac.Sum(nil))
+}
+
+func TestUnmarshalCaddyfile(t *testing.T) {
+	input := `caddy_github_webhook {
+		secret mysecret
+		match {
+			workflow_run.status completed
+			workflow_run.role admin
+		}
+	}`
+
+	d := caddyfile.NewTestDispenser(input)
+
+	var m Middleware
+	var ctx caddy.Context
+
+	err := m.Provision(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := m.UnmarshalCaddyfile(d); err != nil {
+		t.Fatal(err)
+	}
+
+	if m.Secret != "mysecret" {
+		t.Errorf("Secret = %q, want %q", m.Secret, "mysecret")
+	}
+
+	if m.Match["workflow_run.status"] != "completed" {
+		t.Errorf("unexpected status match: %q", m.Match["workflow_run.status"])
+	}
+
+	if m.Match["workflow_run.role"] != "admin" {
+		t.Errorf("unexpected role match: %q", m.Match["workflow_run.role"])
+	}
 }

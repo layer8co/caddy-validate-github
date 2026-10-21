@@ -11,21 +11,50 @@ xcaddy build \
 
 ## Usage
 
-This middleware functions as a gatekeeper for any succeeding directives in a route.
-The request is only passed on to the next directive if its signature is valid.
-Otherwise, the client receives a 403 status code.
+This middleware functions as a gatekeeper for any succeeding directives in a
+route.  The request is only passed on to the next directive if its signature and
+(optionally) conditions are valid. Otherwise, the client receives a 403 status code.
 
 ### Caddyfile
+
+The plugin has two syntaxes for caddyFiles. Pick up the one which is more appropriate for you.
+
+#### Simple syntax
+
+Simply validate the secret and let it pass:
+
 ```
 validate_github_webhook <secret>
 ```
 * **secret** - shared secret between you and GitHub
 
-You could use a tool like `openssl` to generate a secure secret:
 
-```bash
-openssl rand -hex 12
+> [!TIP]
+> You could use a tool like `openssl` to generate a secure secret: `openssl rand
+> -hex 12`
+
+#### Nested Syntax
+
+In the nested syntax, you can also define some matching conditions that gets
+validated with the supplied payload from Github:
+
 ```
+validate_github_webhook {
+  secret <secret>
+
+  match {
+    action completed
+    workflow_run.name "Create and deploy"
+    workflow_run.status completed
+    workflow_run.conclusion success
+  }
+}
+```
+
+> [!TIP]
+> Check out
+> [here](https://docs.github.com/en/webhooks/webhook-events-and-payloads) to
+> learn more about what's available in the github's webhook payload.
 
 #### Example
 
@@ -40,8 +69,8 @@ route /update {
 }
 ```
 
-Here, you're using `validate_github` to validate the request before passing
-it along to [caddy-exec](https://github.com/abiosoft/caddy-exec), runs the
+Here, you're using `validate_github_webhook` to validate the request before passing
+it along to [caddy-exec](https://github.com/abiosoft/caddy-exec), which runs the
 `/path/to/bin/deploy.sh` script. Since `caddy-exec` does not support chaining
 commands at this time, it's necessary to perform multiple commands in a script
 or Go binary and invoke it from the `exec` directive. 

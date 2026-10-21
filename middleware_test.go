@@ -5,7 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -82,13 +82,14 @@ func TestValidateGitHub(t *testing.T) {
 		}
 
 		if w.Code == http.StatusAccepted {
-			b, err := ioutil.ReadAll(r.Body)
+			b, err := io.ReadAll(r.Body)
 			if err != nil {
 				t.Errorf("%d: %v", i, err)
 				continue
 			}
 			_ = r.Body.Close()
 
+			// The request body should be preserved after the middlewares consumes it
 			if len(b) == 0 {
 				t.Errorf("%d: request body empty downstream from middleware", i)
 			}

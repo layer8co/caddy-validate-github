@@ -14,6 +14,8 @@ import (
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
 	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
+	"github.com/layer8co/caddy-validate-github/matcher"
+
 	"go.uber.org/zap"
 )
 
@@ -33,6 +35,10 @@ func init() {
 type Middleware struct {
 	Secret string `json:"secret,omitempty"`
 
+	// Match contains JSON paths and their expected string values.
+	// All conditions must match.
+	Match map[string]string `json:"match,omitempty"`
+
 	logger *zap.SugaredLogger
 	secret []byte
 }
@@ -49,6 +55,10 @@ func (Middleware) CaddyModule() caddy.ModuleInfo {
 func (m *Middleware) Provision(ctx caddy.Context) error {
 	if m.logger == nil {
 		m.logger = ctx.Logger(m).Sugar()
+	}
+
+	if m.Match == nil {
+		m.Match = make(map[string]string)
 	}
 
 	return nil
@@ -77,6 +87,7 @@ func (m Middleware) ServeHTTP(w http.ResponseWriter, r *http.Request,
 		http.Error(w, "invalid signature", http.StatusForbidden)
 		return nil
 	}
+
 	sig, err := hex.DecodeString(s)
 	if err != nil {
 		m.logger.Debugf("error hex-decoding signature '%s': %v", s, err)
@@ -92,7 +103,21 @@ func (m Middleware) ServeHTTP(w http.ResponseWriter, r *http.Request,
 		return nil
 	}
 
-	m.logger.Debugf("successful webhook invocation from %s", r.RemoteAddr)
+	// Now, Checking for the match conditions (If any)
+	if len(m.Match) != 0 {
+		yes, err := matcher.MatchesPayload(b, m.Match)
+		if err != nil {
+			m.logger.Debugf("Error when checking the match conditions: %s", err)
+			return nil
+		}
+
+		if !yes {
+			m.logger.Debugf("The match condition aren't met with the request from %s", r.RemoteAddr)
+			return nil
+		}
+	}
+
+	m.logger.Infof("successful github webhook invocation from %s", r.RemoteAddr)
 	r.Body = io.NopCloser(bytes.NewBuffer(b))
 
 	return next.ServeHTTP(w, r)
@@ -108,17 +133,72 @@ func (m *Middleware) Validate() error {
 	return nil
 }
 
-// UnmarshalCaddyfile implements caddyfile.Unmarshaler. Syntax:
+// UnmarshalCaddyfile implements caddyfile.Unmarshaler.
+// First Syntax:
 //
 //	validate_github_webhook <secret>
+//
+// Second Syntax:
+// validate_github_webhook {
+// secret <secret>
+//
+//	match {
+//	   workflow_run.status completed
+//	}
 func (m *Middleware) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 	for d.Next() {
-		if !d.Args(&m.Secret) {
-			return d.ArgErr()
-		}
+		// The first syntax
 		if d.NextArg() {
-			return d.ArgErr()
+			m.Secret = d.Val()
+			if d.NextArg() {
+				return d.ArgErr()
+			}
 		}
+
+		// The modern syntax
+		for level := d.Nesting(); d.NextBlock(level); {
+			switch d.Val() {
+			case "secret":
+				// Just load the secret then
+				if !d.NextArg() {
+					return d.ArgErr()
+				}
+
+				m.Secret = d.Val()
+
+				if d.NextArg() {
+					return d.ArgErr()
+				}
+
+			case "match":
+				for nesting := d.Nesting(); d.NextBlock(nesting); {
+					// Example of the syntax:
+					// workflow_run.status completed
+					//
+					// "workflow_run.status" is the path and "completed" is the value
+					path := d.Val()
+
+					if !d.NextArg() {
+						return d.ArgErr()
+					}
+
+					value := d.Val()
+
+					if d.NextArg() {
+						return d.ArgErr()
+					}
+
+					if _, exists := m.Match[path]; exists {
+						return d.Errf("there is a duplicate match condition %q", path)
+					}
+
+					m.Match[path] = value
+				}
+
+			}
+
+		}
+
 	}
 
 	return nil

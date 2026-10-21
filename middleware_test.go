@@ -105,6 +105,21 @@ func hashFromSecret(secret string, body []byte) string {
 }
 
 func TestUnmarshalCaddyfile(t *testing.T) {
+	var m Middleware
+	var ctx caddy.Context
+
+	input_legacy := `caddy_github_webhook secret_is_here`
+
+	d := caddyfile.NewTestDispenser(input_legacy)
+	err := m.Provision(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := m.UnmarshalCaddyfile(d); err != nil {
+		t.Fatal(err)
+	}
+
 	input := `caddy_github_webhook {
 		secret mysecret
 		match {
@@ -113,12 +128,8 @@ func TestUnmarshalCaddyfile(t *testing.T) {
 		}
 	}`
 
-	d := caddyfile.NewTestDispenser(input)
+	d = caddyfile.NewTestDispenser(input)
 
-	var m Middleware
-	var ctx caddy.Context
-
-	err := m.Provision(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

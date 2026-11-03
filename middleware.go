@@ -146,61 +146,59 @@ func (m *Middleware) Validate() error {
 //	   workflow_run.status completed
 //	}
 func (m *Middleware) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
-	for d.Next() {
-		// The first syntax
+	// Consume the directive name itself: validate_github_webhook
+	if !d.Next() {
+		return d.ArgErr()
+	}
+
+	// Legacy single-argument form: validate_github_webhook <secret>
+	if d.NextArg() {
+		m.Secret = d.Val()
 		if d.NextArg() {
+			return d.ArgErr() // too many arguments
+		}
+		return nil
+	}
+
+	// Block form
+	for nesting := d.Nesting(); d.NextBlock(nesting); {
+		switch d.Val() {
+		case "secret":
+			if !d.NextArg() {
+				return d.ArgErr()
+			}
 			m.Secret = d.Val()
 			if d.NextArg() {
 				return d.ArgErr()
 			}
-		}
 
-		// The modern syntax
-		for level := d.Nesting(); d.NextBlock(level); {
-			switch d.Val() {
-			case "secret":
-				// Just load the secret then
+		case "match":
+			if m.Match == nil {
+				m.Match = make(map[string]string)
+			}
+			for nest := d.Nesting(); d.NextBlock(nest); {
+				path := d.Val()
 				if !d.NextArg() {
 					return d.ArgErr()
 				}
-
-				m.Secret = d.Val()
-
+				value := d.Val()
 				if d.NextArg() {
 					return d.ArgErr()
 				}
-
-			case "match":
-				for nesting := d.Nesting(); d.NextBlock(nesting); {
-					// Example of the syntax:
-					// workflow_run.status completed
-					//
-					// "workflow_run.status" is the path and "completed" is the value
-					path := d.Val()
-
-					if !d.NextArg() {
-						return d.ArgErr()
-					}
-
-					value := d.Val()
-
-					if d.NextArg() {
-						return d.ArgErr()
-					}
-
-					if _, exists := m.Match[path]; exists {
-						return d.Errf("there is a duplicate match condition %q", path)
-					}
-
-					m.Match[path] = value
+				if _, exists := m.Match[path]; exists {
+					return d.Errf("duplicate match condition %q", path)
 				}
-
+				m.Match[path] = value
 			}
 
+		default:
+			return d.Errf("unknown subdirective %q", d.Val())
 		}
-
 	}
 
+	if m.Secret == "" {
+		return d.Err("secret is required")
+	}
 	return nil
 }
 

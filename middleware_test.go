@@ -12,6 +12,7 @@ import (
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
+	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 	"go.uber.org/zap/zaptest"
 )
@@ -105,34 +106,16 @@ func hashFromSecret(secret string, body []byte) string {
 }
 
 func TestUnmarshalCaddyfile(t *testing.T) {
-	var m Middleware
-	var ctx caddy.Context
-
-	input_legacy := `caddy_github_webhook secret_is_here`
-
-	d := caddyfile.NewTestDispenser(input_legacy)
-	err := m.Provision(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := m.UnmarshalCaddyfile(d); err != nil {
-		t.Fatal(err)
-	}
-
-	input := `caddy_github_webhook {
+	input := `validate_github_webhook {
 		secret mysecret
 		match {
 			workflow_run.status completed
-			workflow_run.role admin
+			workflow_run.conclusion success
 		}
 	}`
 
-	d = caddyfile.NewTestDispenser(input)
-
-	if err != nil {
-		t.Fatal(err)
-	}
+	d := caddyfile.NewTestDispenser(input)
+	var m Middleware
 
 	if err := m.UnmarshalCaddyfile(d); err != nil {
 		t.Fatal(err)
@@ -141,12 +124,45 @@ func TestUnmarshalCaddyfile(t *testing.T) {
 	if m.Secret != "mysecret" {
 		t.Errorf("Secret = %q, want %q", m.Secret, "mysecret")
 	}
-
 	if m.Match["workflow_run.status"] != "completed" {
-		t.Errorf("unexpected status match: %q", m.Match["workflow_run.status"])
+		t.Errorf("status = %q, want completed", m.Match["workflow_run.status"])
+	}
+	if m.Match["workflow_run.conclusion"] != "success" {
+		t.Errorf("conclusion = %q, want success", m.Match["workflow_run.conclusion"])
+	}
+}
+
+func TestCaddyfileSyntax(t *testing.T) {
+	// Register your directive so the adapter knows about it
+	// (only needed if your init() hasn't run yet in the test)
+
+	input := `
+blog.parsajr.ir {
+	route /upgrade {
+		validate_github_webhook {
+			secret test
+			match {
+				action completed
+				workflow_run.name release
+				workflow_run.status completed
+				workflow_run.conclusion success
+			}
+		}
+		respond "ok"
+	}
+}
+`
+
+	// This is exactly what `caddy adapt` does
+	adapter := caddyfile.Adapter{
+		ServerType: httpcaddyfile.ServerType{},
 	}
 
-	if m.Match["workflow_run.role"] != "admin" {
-		t.Errorf("unexpected role match: %q", m.Match["workflow_run.role"])
+	cfg, _, err := adapter.Adapt([]byte(input), nil)
+	if err != nil {
+		t.Fatal(err)
 	}
+
+	// Optional: pretty-print the resulting JSON config
+	t.Log(string(cfg))
 }

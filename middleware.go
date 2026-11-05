@@ -29,6 +29,7 @@ var (
 
 func init() {
 	caddy.RegisterModule(Middleware{})
+	// Setting the Caddyfile's syntax directive name, and its parser.
 	httpcaddyfile.RegisterHandlerDirective("validate_github_webhook", parseCaddyfileHandler)
 }
 
@@ -95,6 +96,7 @@ func (m Middleware) ServeHTTP(w http.ResponseWriter, r *http.Request,
 		return nil
 	}
 
+	// Check to see if github really knows the secret or not.
 	mac := hmac.New(sha256.New, m.secret)
 	mac.Write(b)
 	if sum := mac.Sum(nil); !hmac.Equal(sum, sig) { // constant time comparison
@@ -118,6 +120,8 @@ func (m Middleware) ServeHTTP(w http.ResponseWriter, r *http.Request,
 	}
 
 	m.logger.Infof("successful github webhook invocation from %s", r.RemoteAddr)
+
+	// Reconstruct the consumed body, the next caddy directive might need the information.
 	r.Body = io.NopCloser(bytes.NewBuffer(b))
 
 	return next.ServeHTTP(w, r)
@@ -133,7 +137,10 @@ func (m *Middleware) Validate() error {
 	return nil
 }
 
-// UnmarshalCaddyfile implements caddyfile.Unmarshaler.
+// https://caddyserver.com/docs/extending-caddy/caddyfile
+//
+// # UnmarshalCaddyfile implements caddyfile.Unmarshaler
+//
 // First Syntax:
 //
 //	validate_github_webhook <secret>
@@ -146,7 +153,7 @@ func (m *Middleware) Validate() error {
 //	   workflow_run.status completed
 //	}
 func (m *Middleware) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
-	// Consume the directive name itself: validate_github_webhook
+	// Consume the directive name!: validate_github_webhook
 	if !d.Next() {
 		return d.ArgErr()
 	}
@@ -186,7 +193,7 @@ func (m *Middleware) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 					return d.ArgErr()
 				}
 				if _, exists := m.Match[path]; exists {
-					return d.Errf("duplicate match condition %q", path)
+					return d.Errf("duplicate match condition: %q", path)
 				}
 				m.Match[path] = value
 			}

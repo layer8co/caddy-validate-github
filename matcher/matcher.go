@@ -6,8 +6,9 @@ import (
 	"strings"
 )
 
-// matchesPayload returns true when every configured JSON path
-// exists in the payload and its value matches the expected value.
+// matchesPayload returns true when
+// 1. every configured JSON path exists in the payload and
+// 2. its value matches the expected value.
 func MatchesPayload(body []byte, conditions map[string]string) (bool, error) {
 	var payload map[string]any
 	if err := json.Unmarshal(body, &payload); err != nil {
@@ -17,7 +18,6 @@ func MatchesPayload(body []byte, conditions map[string]string) (bool, error) {
 	for path, value := range conditions {
 		var current any = payload
 
-		// Gopls suggests that "SplitSeq" is more efficient than "Split".
 		for part := range strings.SplitSeq(path, ".") {
 
 			object, ok := current.(map[string]any)
